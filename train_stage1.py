@@ -169,6 +169,7 @@ def main_worker(gpu, ngpus_per_node, config, logger, model_dir):
             block = torch.nn.DataParallel(block).cuda()
 
     # optionally resume from a checkpoint
+
     if config.resume:
         if os.path.isfile(config.resume):
             logger.info("=> loading checkpoint '{}'".format(config.resume))
@@ -178,7 +179,7 @@ def main_worker(gpu, ngpus_per_node, config, logger, model_dir):
                 # Map model to be loaded to specified single gpu.
                 loc = 'cuda:{}'.format(config.gpu)
                 checkpoint = torch.load(config.resume, map_location=loc)
-            # config.start_epoch = checkpoint['epoch']
+            config.start_epoch = checkpoint['epoch']
             best_acc1 = checkpoint['best_acc1']
             if config.gpu is not None:
                 # best_acc1 may be from a checkpoint from a different GPU
