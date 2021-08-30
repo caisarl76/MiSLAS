@@ -3,6 +3,7 @@ from yacs.config import CfgNode as CN
 import os
 import time
 import logging
+from torch.utils.tensorboard import SummaryWriter
 
 _C = CN()
 _C.name = ''
@@ -97,9 +98,10 @@ def create_logger(cfg, cfg_name, add_date=False):
     logger.setLevel(logging.INFO)
     console = logging.StreamHandler()
     logging.getLogger('').addHandler(console)
+    writer = SummaryWriter(log_dir)
 
     model_dir = os.path.join(path, 'ckps')
     print('=> creating {}'.format(model_dir))
     os.makedirs(model_dir, exist_ok=True)
 
-    return logger, str(model_dir)
+    return logger, str(model_dir), writer

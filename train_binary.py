@@ -17,6 +17,7 @@ import torch.multiprocessing as mp
 import torch.utils.data
 import torch.utils.data.distributed
 import torch.nn.functional as F
+from torch.utils.tensorboard import SummaryWriter
 
 from datasets.cifar10 import CIFAR10_LT
 from datasets.cifar100 import CIFAR100_LT
@@ -58,7 +59,7 @@ its_ece = 100
 
 def main():
     args = parse_args()
-    logger, model_dir = create_logger(config, args.cfg)
+    logger, model_dir, writer = create_logger(config, args.cfg)
     logger.info('\n' + pprint.pformat(args))
     logger.info('\n' + str(config))
 
@@ -81,9 +82,9 @@ def main():
         config.world_size = int(os.environ["WORLD_SIZE"])
 
     ngpus_per_node = torch.cuda.device_count()
-    main_worker(config.gpu, ngpus_per_node, config, logger, model_dir)
+    main_worker(config.gpu, ngpus_per_node, config, logger, model_dir, writer)
 
-def main_worker(gpu, ngpus_per_node, config, logger, model_dir):
+def main_worker(gpu, ngpus_per_node, config, logger, model_dir, writer):
     global best_acc1, its_ece
     config.gpu = gpu
     #     start_time = time.strftime("%Y%m%d_%H%M%S", time.localtime())
@@ -126,10 +127,10 @@ def main_worker(gpu, ngpus_per_node, config, logger, model_dir):
     for epoch in range(config.num_epochs):
         # adjust_learning_rate(optimizer, scheduler, epoch, config)
         # train for one epoch
-        train(train_loader, model, criterion, optimizer, scheduler, epoch, config, logger)
+        train(train_loader, model, criterion, optimizer, scheduler, epoch, config, logger, writer)
 
         # evaluate on validation set
-        acc1, ece = validate(val_loader, model, criterion, config, logger)
+        acc1, loss, ece = validate(val_loader, model, criterion, config, logger, writer)
 
         # remember best acc@1 and save checkpoint
         is_best = acc1 > best_acc1
@@ -137,7 +138,9 @@ def main_worker(gpu, ngpus_per_node, config, logger, model_dir):
         if is_best:
             its_ece = ece
         logger.info('Best Prec@1: %.3f%% ECE: %.3f%%\n' % (best_acc1, its_ece))
-
+        writer.add_scalar('val loss', loss, epoch)
+        writer.add_scalar('val ece', ece, epoch)
+        writer.add_scalar('val acc', acc1, epoch)
         if epoch % 10 == 0:
             save_checkpoint({
                 'epoch': epoch + 1,
@@ -145,9 +148,10 @@ def main_worker(gpu, ngpus_per_node, config, logger, model_dir):
                 'best_acc1': best_acc1,
                 'its_ece': its_ece,
             }, is_best, model_dir)
+    writer.close()
 
 
-def train(train_loader, model, criterion, optimizer, scheduler, epoch, config, logger):
+def train(train_loader, model, criterion, optimizer, scheduler, epoch, config, logger, writer):
 
     batch_time = AverageMeter('Time', ':6.3f')
     data_time = AverageMeter('Data', ':6.3f')
@@ -202,6 +206,8 @@ def train(train_loader, model, criterion, optimizer, scheduler, epoch, config, l
 
         if i % config.print_freq == 0:
             progress.display(i, logger)
+        writer.add_scalar('train loss', losses.avg, epoch)
+        writer.add_scalar('train acc', top1.avg, epoch)
 
 
 def validate(val_loader, model, criterion, config, logger):
@@ -271,7 +277,7 @@ def validate(val_loader, model, criterion, config, logger):
         cal = calibration(true_class, pred_class, confidence, num_bins=15)
         logger.info('* ECE   {ece:.3f}%.'.format(ece=cal['expected_calibration_error'] * 100))
 
-    return top1.avg, cal['expected_calibration_error'] * 100
+    return top1.avg, losses.avg, cal['expected_calibration_error'] * 100
 
 
 
