@@ -130,7 +130,7 @@ def main_worker(gpu, ngpus_per_node, config, logger, model_dir, writer):
         train(train_loader, model, criterion, optimizer, scheduler, epoch, config, logger, writer)
 
         # evaluate on validation set
-        acc1, loss, ece = validate(val_loader, model, criterion, config, logger, writer)
+        acc1, loss, ece = validate(val_loader, model, criterion, config, logger)
 
         # remember best acc@1 and save checkpoint
         is_best = acc1 > best_acc1
