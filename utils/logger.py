@@ -43,8 +43,8 @@ _C.smooth_head = None
 _C.shift_bn = False
 _C.lr_factor = None
 _C.lr = 0.1
-_C.optimizer: 'SGD'
-_C.lr_scheduler: 'step'
+_C.optimizer = 'SGD'
+_C.lr_scheduler = 'step'
 _C.batch_size = 128
 _C.weight_decay = 0.002
 _C.num_epochs = 200
@@ -73,8 +73,8 @@ def create_logger(cfg, cfg_name, add_date=False):
 
     cfg_name = os.path.basename(cfg_name).split('.')[0]
     if cfg.binary:
-        args_list = '_'.join(cfg.)
-        path = os.path.join('saved/binary', cfg_name,
+        args_list = '_'.join([cfg.optimizer, cfg.lr_scheduler])
+        path = os.path.join('saved/binary', cfg_name, args_list,
                             '_'.join(['epochs', (str)(cfg.num_epochs), 'bs' + (str)(cfg.batch_size)])
                             )
     else:
