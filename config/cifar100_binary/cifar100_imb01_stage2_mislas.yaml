@@ -1,16 +1,17 @@
-name: cifar10_imb01_stage1_binary
+name: cifar100_imb01_stage2_mislas
 print_freq: 40
 workers: 4
 log_dir: 'logs'
 model_dir: 'ckps'
-binary: True
+
 
 # dataset & model setting
-dataset: 'cifar10'
-data_path: './data/cifar10'
-num_classes: 10
+dataset: 'cifar100'
+data_path: './data/cifar100'
+num_classes: 100
 imb_factor: 0.1
-resume: ''
+backbone: 'resnet32_fe'
+resume: 'Path/to/Stage1_checkpoint.pth.tar'
 head_class_idx:
   - 0
   - 36
@@ -34,16 +35,15 @@ multiprocessing_distributed: False
 
 
 # Train
-mode: 'stage1'
-lr: 0.01
+mode: 'stage2'
+smooth_head: 0.2
+smooth_tail: 0.0
+shift_bn: True
+lr_factor: 0.1
+lr: 0.1
 batch_size: 128
 weight_decay: 2e-4
-num_epochs: 200
+num_epochs: 10
 momentum: 0.9
-cos: False
 mixup: False
-alpha: 0.0
-
-
-
-
+alpha: null

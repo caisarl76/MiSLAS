@@ -1,4 +1,4 @@
-name: cifar10_imb01_stage1_binary
+name: cifar100_imb01_stage1_mixup_binary
 print_freq: 40
 workers: 4
 log_dir: 'logs'
@@ -6,9 +6,9 @@ model_dir: 'ckps'
 binary: True
 
 # dataset & model setting
-dataset: 'cifar10'
-data_path: './data/cifar10'
-num_classes: 10
+dataset: 'cifar100'
+data_path: './data/cifar100'
+num_classes: 100
 imb_factor: 0.1
 resume: ''
 head_class_idx:

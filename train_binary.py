@@ -120,7 +120,9 @@ def main_worker(gpu, ngpus_per_node, config, logger, model_dir, writer):
         optimizer = torch.optim.Adam(model.parameters(), lr=config.lr)
 
     if config.lr_scheduler == 'step':
-        scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[150, 180], gamma=0.1)
+        scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[150,
+
+                                                                                180], gamma=0.1)
     elif config.lr_scheduler == 'cosine':
         scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=50, eta_min=0)
 

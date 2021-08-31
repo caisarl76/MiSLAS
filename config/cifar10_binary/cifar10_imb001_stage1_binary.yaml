@@ -1,4 +1,4 @@
-name: cifar10_imb001_stage1_mixup/SGD_STEP/lr_0.01
+name: cifar10_imb001_stage1_binary
 print_freq: 40
 workers: 4
 log_dir: 'logs'

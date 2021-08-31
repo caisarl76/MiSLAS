@@ -1,4 +1,4 @@
-name: cifar10_imb01_stage1_binary
+name: cifar10_imb01_stage1_mixup_binary
 print_freq: 40
 workers: 4
 log_dir: 'logs'
@@ -41,8 +41,8 @@ weight_decay: 2e-4
 num_epochs: 200
 momentum: 0.9
 cos: False
-mixup: False
-alpha: 0.0
+mixup: True
+alpha: 1.0
 
 
 
