@@ -64,16 +64,16 @@ def main():
     logger.info('\n' + pprint.pformat(args))
     logger.info('\n' + str(config))
 
-    if config.deterministic:
-        seed = 0
-        torch.backends.cudnn.deterministic = True
-        torch.backends.cudnn.benchmark = False
-        random.seed(seed)
-        np.random.seed(seed)
-        os.environ['PYTHONHASHSEED'] = str(seed)
-        torch.manual_seed(seed)
-        torch.cuda.manual_seed(seed)
-        torch.cuda.manual_seed_all(seed)
+    # if config.deterministic:
+    #     seed = 0
+    #     torch.backends.cudnn.deterministic = True
+    #     torch.backends.cudnn.benchmark = False
+    #     random.seed(seed)
+    #     np.random.seed(seed)
+    #     os.environ['PYTHONHASHSEED'] = str(seed)
+    #     torch.manual_seed(seed)
+    #     torch.cuda.manual_seed(seed)
+    #     torch.cuda.manual_seed_all(seed)
 
     if config.gpu is not None:
         warnings.warn('You have chosen a specific GPU. This will completely '
