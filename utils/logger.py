@@ -73,15 +73,11 @@ def create_logger(cfg, cfg_name, add_date=False):
     # time_str = time.strftime('%Y%m%d%H%M')
 
     cfg_name = os.path.basename(cfg_name).split('.')[0]
-    if cfg.binary:
-        args_list = '_'.join([cfg.optimizer, cfg.lr_scheduler])
-        path = os.path.join('saved/binary', cfg_name, args_list, (str)(cfg.lr),
-                            '_'.join(['epochs', (str)(cfg.num_epochs), 'bs' + (str)(cfg.batch_size)])
-                            )
-    else:
-        path = os.path.join('saved', cfg_name,
-                            '_'.join(['epochs',(str)(cfg.num_epochs), 'bs' + (str)(cfg.batch_size)])
-                            )
+
+    args_list = '_'.join([cfg.optimizer, cfg.lr_scheduler])
+    path = os.path.join('saved/binary', cfg_name, args_list, (str)(cfg.lr),
+                        '_'.join(['epochs', (str)(cfg.num_epochs), 'bs' + (str)(cfg.batch_size)])
+                    )
     # if add_date:
     #     log_dir = Path("saved") / (cfg_name + '_' + time_str) / Path(cfg.log_dir)
     # else:
