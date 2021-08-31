@@ -79,29 +79,12 @@ def main():
         warnings.warn('You have chosen a specific GPU. This will completely '
                       'disable data parallelism.')
 
-    if config.dist_url == "env://" and config.world_size == -1:
-        config.world_size = int(os.environ["WORLD_SIZE"])
-
-    config.distributed = config.world_size > 1 or config.multiprocessing_distributed
-
     ngpus_per_node = torch.cuda.device_count()
-    if config.multiprocessing_distributed:
-        # Since we have ngpus_per_node processes per node, the total world_size
-        # needs to be adjusted accordingly
-        config.world_size = ngpus_per_node * config.world_size
-        # Use torch.multiprocessing.spawn to launch distributed processes: the
-        # main_worker process function
-        mp.spawn(main_worker, nprocs=ngpus_per_node, args=(ngpus_per_node, config, logger, model_dir))
-    else:
-        # Simply call main_worker function
-        main_worker(config.gpu, ngpus_per_node, config, logger, model_dir)
+    # Simply call main_worker function
+    main_worker(config.gpu, ngpus_per_node, config, logger, model_dir, writer)
 
 
-def main_worker(gpu, ngpus_per_node, config, logger, model_dir):
-
-    ###
-    writer = create_writer(config, model_dir)
-
+def main_worker(gpu, ngpus_per_node, config, logger, model_dir, writer):
     global best_acc1, its_ece
     config.gpu = gpu
 #     start_time = time.strftime("%Y%m%d_%H%M%S", time.localtime())
@@ -109,48 +92,18 @@ def main_worker(gpu, ngpus_per_node, config, logger, model_dir):
     if config.gpu is not None:
         logger.info("Use GPU: {} for training".format(config.gpu))
 
-    if config.distributed:
-        if config.dist_url == "env://" and config.rank == -1:
-            config.rank = int(os.environ["RANK"])
-        if config.multiprocessing_distributed:
-            # For multiprocessing distributed training, rank needs to be the
-            # global rank among all the processes
-            config.rank = config.rank * ngpus_per_node + gpu
-        dist.init_process_group(backend=config.dist_backend, init_method=config.dist_url,
-                                world_size=config.world_size, rank=config.rank)
-
     model = Reactnet()
 
     if not torch.cuda.is_available():
         logger.info('using CPU, this will be slow')
-    elif config.distributed:
-        # For multiprocessing distributed, DistributedDataParallel constructor
-        # should always set the single device scope, otherwise,
-        # DistributedDataParallel will use all available devices.
-        model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model)
-        if config.gpu is not None:
-            torch.cuda.set_device(config.gpu)
-            model.cuda(config.gpu)
-            # When using a single GPU per process and per
-            # DistributedDataParallel, we need to divide the batch size
-            # ourselves based on the total number of GPUs we have
-            config.batch_size = int(config.batch_size / ngpus_per_node)
-            config.workers = int((config.workers + ngpus_per_node - 1) / ngpus_per_node)
-            model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[config.gpu])
+        raise NotImplementedError("Only DistributedDataParallel is supported.")
+    elif torch.cuda.device_count() > 1:
+        model = nn.DataParallel(model).cuda()
 
-        else:
-            model.cuda()
-            # DistributedDataParallel will divide and allocate batch_size to all
-            # available GPUs if device_ids are not set
-            model = torch.nn.parallel.DistributedDataParallel(model)
-    elif config.gpu is not None:
-        torch.cuda.set_device(config.gpu)
-        model = model.cuda(config.gpu)
-        raise NotImplementedError("Only DistributedDataParallel is supported.")
     else:
-        # DataParallel will divide and allocate batch_size to all available GPUs
-        model = torch.nn.DataParallel(model).cuda()
-        raise NotImplementedError("Only DistributedDataParallel is supported.")
+        device = torch.device("cuda:0")
+        model = model.to(device)
+
 
 
     # optionally resume from a checkpoint
@@ -180,8 +133,6 @@ def main_worker(gpu, ngpus_per_node, config, logger, model_dir):
 
     train_loader = dataset.train_instance
     val_loader = dataset.eval
-    if config.distributed:
-        train_sampler = dataset.dist_sampler
 
     # define loss function (criterion) and optimizer
     criterion = nn.CrossEntropyLoss().cuda(config.gpu)
@@ -203,9 +154,10 @@ def main_worker(gpu, ngpus_per_node, config, logger, model_dir):
         if is_best:
             its_ece = ece
         logger.info('Best Prec@1: %.3f%% ECE: %.3f%%\n' % (best_acc1, its_ece))
-        writer.add_scalar('val loss', loss, epoch)
-        writer.add_scalar('val ece', ece, epoch)
-        writer.add_scalar('val acc', acc1, epoch)
+        if gpu == 0:
+            writer.add_scalar('val loss', loss, epoch)
+            writer.add_scalar('val ece', ece, epoch)
+            writer.add_scalar('val acc', acc1, epoch)
         if epoch % 10 == 0:
             save_checkpoint({
                 'epoch': epoch + 1,
@@ -213,10 +165,11 @@ def main_worker(gpu, ngpus_per_node, config, logger, model_dir):
                 'best_acc1': best_acc1,
                 'its_ece': its_ece,
             }, is_best, model_dir)
-    writer.close()
+    if gpu == 0:
+        writer.close()
 
 
-def train(train_loader, model, criterion, optimizer, scheduler, epoch, config, logger, writer):
+def train(train_loader, model, criterion, optimizer, scheduler, epoch, config, logger, writer=None):
 
     batch_time = AverageMeter('Time', ':6.3f')
     data_time = AverageMeter('Data', ':6.3f')
@@ -242,8 +195,8 @@ def train(train_loader, model, criterion, optimizer, scheduler, epoch, config, l
         data_time.update(time.time() - end)
 
         if torch.cuda.is_available():
-            images = images.cuda(config.gpu, non_blocking=True)
-            target = target.cuda(config.gpu, non_blocking=True)
+            images = images.cuda()
+            target = target.cuda()
 
         if config.mixup is True:
             images, targets_a, targets_b, lam = mixup_data(images, target, alpha=config.alpha)
@@ -271,8 +224,9 @@ def train(train_loader, model, criterion, optimizer, scheduler, epoch, config, l
 
         if i % config.print_freq == 0:
             progress.display(i, logger)
-        writer.add_scalar('train loss', losses.avg, epoch)
-        writer.add_scalar('train acc', top1.avg, epoch)
+        if writer:
+            writer.add_scalar('train loss', losses.avg, epoch)
+            writer.add_scalar('train acc', top1.avg, epoch)
 
 
 def validate(val_loader, model, criterion, config, logger):
@@ -299,9 +253,9 @@ def validate(val_loader, model, criterion, config, logger):
         end = time.time()
         for i, (images, target) in enumerate(val_loader):
             if config.gpu is not None:
-                images = images.cuda(config.gpu, non_blocking=True)
+                images = images.cuda()
             if torch.cuda.is_available():
-                target = target.cuda(config.gpu, non_blocking=True)
+                target = target.cuda()
             output = model(images)
             loss = criterion(output, target)
 
