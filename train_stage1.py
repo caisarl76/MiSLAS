@@ -169,7 +169,7 @@ def main_worker(gpu, ngpus_per_node, config, logger, model_dir):
             block = torch.nn.DataParallel(block).cuda()
 
     # optionally resume from a checkpoint
-
+    cur_epoch = 0
     if config.resume:
         if os.path.isfile(config.resume):
             logger.info("=> loading checkpoint '{}'".format(config.resume))

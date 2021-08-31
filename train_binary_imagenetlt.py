@@ -2,10 +2,11 @@ import argparse
 import os
 import random
 import shutil
-import sys
-import numpy as np
+import time
 import warnings
+import numpy as np
 import pprint
+import math
 
 import torch
 import torch.nn as nn
@@ -16,57 +17,52 @@ import torch.multiprocessing as mp
 import torch.utils.data
 import torch.utils.data.distributed
 import torch.nn.functional as F
-import torchvision.models as models
-from torchvision import datasets, transforms
+from torch.utils.tensorboard import SummaryWriter
 
 from datasets.cifar10 import CIFAR10_LT
 from datasets.cifar100 import CIFAR100_LT
+from datasets.places import Places_LT
 from datasets.imagenet import ImageNet_LT
+from datasets.ina2018 import iNa2018
 
-from utils import create_logger
+from models import resnet
+from models import resnet_places
+from models import resnet_cifar
+
+from utils import config, update_config, create_logger
 from utils import AverageMeter, ProgressMeter
 from utils import accuracy, calibration
 
 from methods import mixup_data, mixup_criterion
-from binary.reactnet_imagenet import reactnet
-from binary import KD_loss
-from binary.utils import *
+
+from binary.reactnet_optimized import Reactnet
+
 
 def parse_args():
-    parser = argparse.ArgumentParser("birealnet18")
-    parser.add_argument('--batch_size', type=int, default=512, help='batch size')
-    parser.add_argument('--epochs', type=int, default=256, help='num of training epochs')
-    parser.add_argument('--learning_rate', type=float, default=0.001, help='init learning rate')
-    parser.add_argument('--momentum', type=float, default=0.9, help='momentum')
-    parser.add_argument('--weight_decay', type=float, default=0, help='weight decay')
-    parser.add_argument('--save', type=str, default='./models', help='path for saving trained models')
-    parser.add_argument('--data', metavar='DIR', help='path to dataset')
-    parser.add_argument('--dataset', default='imagenet_lt', help='choose dataset to use')
-    parser.add_argument('--label_smooth', type=float, default=0.1, help='label smoothing')
-    parser.add_argument('--pretrained', type=str, default='resnet34', help='path of ImageNet')
-    parser.add_argument('-j', '--workers', default=40, type=int, metavar='N',
-                        help='number of data loading workers (default: 4)')
-    parser.add_argument('--distributed', action='store_true')
-    parser.add_argument('--gpu', type=int, default=None)
-    parser.add_argument('--world_size', type=int, default=-1)
-    parser.add_argument('--rank', type=int, default=-1)
-    parser.add_argument('--dist_url', type=str, default='tcp://224.66.41.62:23456')
-    parser.add_argument('--dist_backend', type=str, default='nccl')
-    parser.add_argument('--multiprocessing_distributed', action='store_true')
-
+    parser = argparse.ArgumentParser(description='MiSLAS training (Stage-1)')
+    parser.add_argument('--cfg',
+                        help='experiment configure file name',
+                        required=True,
+                        type=str)
+    parser.add_argument('opts',
+                        help="Modify config options using the command-line",
+                        default=None,
+                        nargs=argparse.REMAINDER)
     args = parser.parse_args()
+    update_config(config, args)
 
     return args
 
+
 best_acc1 = 0
 its_ece = 100
-CLASSES = 1000
+
 
 def main():
     args = parse_args()
-    logger, writer = create_logger(args)
+    logger, model_dir, writer = create_logger(config, args.cfg)
     logger.info('\n' + pprint.pformat(args))
-    logger.info('\n' + str(args))
+    logger.info('\n' + str(config))
 
     if config.deterministic:
         seed = 0
@@ -79,115 +75,293 @@ def main():
         torch.cuda.manual_seed(seed)
         torch.cuda.manual_seed_all(seed)
 
-    if args.gpu is not None:
+    if config.gpu is not None:
         warnings.warn('You have chosen a specific GPU. This will completely '
                       'disable data parallelism.')
 
-    if args.dist_url == "env://" and args.world_size == -1:
-        args.world_size = int(os.environ["WORLD_SIZE"])
+    if config.dist_url == "env://" and config.world_size == -1:
+        config.world_size = int(os.environ["WORLD_SIZE"])
 
-    args.distributed = args.world_size > 1 or args.multiprocessing_distributed
+    config.distributed = config.world_size > 1 or config.multiprocessing_distributed
 
     ngpus_per_node = torch.cuda.device_count()
-    if args.multiprocessing_distributed:
+    if config.multiprocessing_distributed:
         # Since we have ngpus_per_node processes per node, the total world_size
         # needs to be adjusted accordingly
-        args.world_size = ngpus_per_node * args.world_size
+        config.world_size = ngpus_per_node * config.world_size
         # Use torch.multiprocessing.spawn to launch distributed processes: the
         # main_worker process function
-        mp.spawn(main_worker, nprocs=ngpus_per_node, args=(ngpus_per_node, args))
+        mp.spawn(main_worker, nprocs=ngpus_per_node, args=(ngpus_per_node, config, logger, writer))
     else:
         # Simply call main_worker function
-        main_worker(args.gpu, ngpus_per_node, args, logger, writer)
+        main_worker(config.gpu, ngpus_per_node, config, logger, model_dir, writer)
 
-def main_worker(gpu, ngpus_per_node, args, logger, writer):
+
+def main_worker(gpu, ngpus_per_node, config, logger, model_dir, writer):
     global best_acc1, its_ece
-    args.gpu = gpu
-    #     start_time = time.strftime("%Y%m%d_%H%M%S", time.localtime())
+    config.gpu = gpu
+#     start_time = time.strftime("%Y%m%d_%H%M%S", time.localtime())
 
-    if args.gpu is not None:
-        logger.info("Use GPU: {} for training".format(args.gpu))
+    if config.gpu is not None:
+        logger.info("Use GPU: {} for training".format(config.gpu))
 
-    if args.distributed:
-        if args.dist_url == "env://" and args.rank == -1:
-            args.rank = int(os.environ["RANK"])
-        if args.multiprocessing_distributed:
+    if config.distributed:
+        if config.dist_url == "env://" and config.rank == -1:
+            config.rank = int(os.environ["RANK"])
+        if config.multiprocessing_distributed:
             # For multiprocessing distributed training, rank needs to be the
             # global rank among all the processes
-            args.rank = args.rank * ngpus_per_node + gpu
-        dist.init_process_group(backend=args.dist_backend, init_method=args.dist_url,
-                                world_size=args.world_size, rank=args.rank)
+            config.rank = config.rank * ngpus_per_node + gpu
+        dist.init_process_group(backend=config.dist_backend, init_method=config.dist_url,
+                                world_size=config.world_size, rank=config.rank)
 
-    # create model
-    model_teacher = models.resnet50(pretrained=False)
-    model = reactnet()
+    model = Reactnet()
 
-    if args.distributed:
-        if args.gpu is not None:
-            torch.cuda.set_device(args.gpu)
-            model_teacher.cuda(args.gpu)
-            model.cuda(args.gpu)
-
+    if not torch.cuda.is_available():
+        logger.info('using CPU, this will be slow')
+    elif config.distributed:
+        # For multiprocessing distributed, DistributedDataParallel constructor
+        # should always set the single device scope, otherwise,
+        # DistributedDataParallel will use all available devices.
+        if config.gpu is not None:
+            torch.cuda.set_device(config.gpu)
+            model.cuda(config.gpu)
             # When using a single GPU per process and per
             # DistributedDataParallel, we need to divide the batch size
             # ourselves based on the total number of GPUs we have
-            args.batch_size = int(args.batch_size / ngpus_per_node)
-            args.workers = int((args.workers + ngpus_per_node - 1) / ngpus_per_node)
-
-            model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[args.gpu])
-            model_teacher = torch.nn.parallel.DistributedDataParallel(model_teacher, device_ids=[args.gpu])
+            config.batch_size = int(config.batch_size / ngpus_per_node)
+            config.workers = int((config.workers + ngpus_per_node - 1) / ngpus_per_node)
+            model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[config.gpu])
 
         else:
-            model_teacher.cuda(args.gpu)
-            model.cuda(args.gpu)
+            model.cuda()
             # DistributedDataParallel will divide and allocate batch_size to all
             # available GPUs if device_ids are not set
-            model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[args.gpu])
-            model_teacher = torch.nn.parallel.DistributedDataParallel(model_teacher, device_ids=[args.gpu])
-    elif args.gpu is not None:
-        torch.cuda.set_device(args.gpu)
-        model_teacher.cuda(args.gpu)
-        model.cuda(args.gpu)
+            model = torch.nn.parallel.DistributedDataParallel(model)
+    elif config.gpu is not None:
+        torch.cuda.set_device(config.gpu)
+        model = model.cuda(config.gpu)
     else:
         # DataParallel will divide and allocate batch_size to all available GPUs
-        model_teacher = torch.nn.DataParallel(model_teacher).cuda()
         model = torch.nn.DataParallel(model).cuda()
 
-    # if os.path.exists(args.pretrained):
-    #     # load model
-    #     encoder_weight = torch.load(args.pretrained)['state_dict_model']
-    #     classifier_weight = torch.load(args.pretrained)['state_dict_classifier']
-    #     model_teacher.load_state_dict(encoder_weight, strict=False)
-    #     model_teacher.load_state_dict(classifier_weight, strict=False)
-    #     print(model_teacher.state_dict())
-    # else:
-    #     print('wrong pretrained path: ', args.pretrained)
-    #     print('train from scratch')
-    #     return
 
-    # freeze teacher model
-    # for p in model_teacher.parameters():
-    #     p.requires_grad = False
-    # model_teacher.eval()
+    # optionally resume from a checkpoint
+    cur_epoch = 0
+    if config.resume:
+        if os.path.isfile(config.resume):
+            logger.info("=> loading checkpoint '{}'".format(config.resume))
+            if config.gpu is None:
+                checkpoint = torch.load(config.resume)
+            else:
+                # Map model to be loaded to specified single gpu.
+                loc = 'cuda:{}'.format(config.gpu)
+                checkpoint = torch.load(config.resume, map_location=loc)
+            config.start_epoch = checkpoint['epoch']
+            best_acc1 = checkpoint['best_acc1']
+            if config.gpu is not None:
+                # best_acc1 may be from a checkpoint from a different GPU
+                best_acc1 = best_acc1.to(config.gpu)
+            model.load_state_dict(checkpoint['state_dict_model'])
+            logger.info("=> loaded checkpoint '{}' (epoch {})"
+                        .format(config.resume, checkpoint['epoch']))
+        else:
+            logger.info("=> no checkpoint found at '{}'".format(config.resume))
 
-    if args.dataset == 'imagenet_lt':
-        dataset = ImageNet_LT(args.distributed, root=args.data_path,
-                              batch_size=args.batch_size, num_works=args.workers)
+    dataset = ImageNet_LT(config.distributed, root=config.data_path,
+                          batch_size=config.batch_size, num_works=config.workers)
+
     train_loader = dataset.train_instance
     val_loader = dataset.eval
-    if args.distributed:
+    if config.distributed:
         train_sampler = dataset.dist_sampler
 
-    criterion = nn.CrossEntropyLoss().cuda(args.gpu)
-    optimizer = torch.optim.Adam(model.parameters(), args.lr)
+    # define loss function (criterion) and optimizer
+    criterion = nn.CrossEntropyLoss().cuda(config.gpu)
+
+    optimizer = torch.optim.Adam(model.parameters(), lr=config.lr)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=50, eta_min=0)
 
-    for epoch in range(args.epochs):
-        if args.distributed:
-            train_sampler.set_epoch(epoch)
+    for epoch in range(config.num_epochs):
+        # adjust_learning_rate(optimizer, scheduler, epoch, config)
+        # train for one epoch
+        train(train_loader, model, criterion, optimizer, scheduler, epoch, config, logger, writer)
 
-        adjust_learning_rate(optimizer, epoch, args)
+        # evaluate on validation set
+        acc1, loss, ece = validate(val_loader, model, criterion, config, logger)
 
+        # remember best acc@1 and save checkpoint
+        is_best = acc1 > best_acc1
+        best_acc1 = max(acc1, best_acc1)
+        if is_best:
+            its_ece = ece
+        logger.info('Best Prec@1: %.3f%% ECE: %.3f%%\n' % (best_acc1, its_ece))
+        writer.add_scalar('val loss', loss, epoch)
+        writer.add_scalar('val ece', ece, epoch)
+        writer.add_scalar('val acc', acc1, epoch)
+        if epoch % 10 == 0:
+            save_checkpoint({
+                'epoch': epoch + 1,
+                'state_dict_model': model.state_dict(),
+                'best_acc1': best_acc1,
+                'its_ece': its_ece,
+            }, is_best, model_dir)
+    writer.close()
+
+
+def train(train_loader, model, criterion, optimizer, scheduler, epoch, config, logger, writer):
+
+    batch_time = AverageMeter('Time', ':6.3f')
+    data_time = AverageMeter('Data', ':6.3f')
+    losses = AverageMeter('Loss', ':.3f')
+    top1 = AverageMeter('Acc@1', ':6.3f')
+    top5 = AverageMeter('Acc@5', ':6.3f')
+    progress = ProgressMeter(
+        len(train_loader),
+        [batch_time, losses, top1, top5],
+        prefix="Epoch: [{}]".format(epoch))
+
+    model.train()
+
+    training_data_num = len(train_loader.dataset)
+    end_steps = int(training_data_num / train_loader.batch_size)
+
+    end = time.time()
+    for i, (images, target) in enumerate(train_loader):
+        if i > end_steps:
+            break
+
+        # measure data loading time
+        data_time.update(time.time() - end)
+
+        if torch.cuda.is_available():
+            images = images.cuda(config.gpu, non_blocking=True)
+            target = target.cuda(config.gpu, non_blocking=True)
+
+        if config.mixup is True:
+            images, targets_a, targets_b, lam = mixup_data(images, target, alpha=config.alpha)
+            output = model(images)
+            loss = mixup_criterion(criterion, output, targets_a, targets_b, lam)
+        else:
+
+            output = model(images)
+            loss = criterion(output, target)
+
+        acc1, acc5 = accuracy(output, target, topk=(1, 5))
+        losses.update(loss.item(), images.size(0))
+        top1.update(acc1[0], images.size(0))
+        top5.update(acc5[0], images.size(0))
+
+        # compute gradient and do SGD step
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
+        scheduler.step()
+
+        # measure elapsed time
+        batch_time.update(time.time() - end)
+        end = time.time()
+
+        if i % config.print_freq == 0:
+            progress.display(i, logger)
+        writer.add_scalar('train loss', losses.avg, epoch)
+        writer.add_scalar('train acc', top1.avg, epoch)
+
+
+def validate(val_loader, model, criterion, config, logger):
+    batch_time = AverageMeter('Time', ':6.3f')
+    losses = AverageMeter('Loss', ':.3f')
+    top1 = AverageMeter('Acc@1', ':6.3f')
+    top5 = AverageMeter('Acc@5', ':6.3f')
+    progress = ProgressMeter(
+        len(val_loader),
+        [batch_time, losses, top1, top5],
+        prefix='Eval: ')
+
+    # switch to evaluate mode
+    model.eval()
+
+    class_num = torch.zeros(config.num_classes).cuda()
+    correct = torch.zeros(config.num_classes).cuda()
+
+    confidence = np.array([])
+    pred_class = np.array([])
+    true_class = np.array([])
+
+    with torch.no_grad():
+        end = time.time()
+        for i, (images, target) in enumerate(val_loader):
+            if config.gpu is not None:
+                images = images.cuda(config.gpu, non_blocking=True)
+            if torch.cuda.is_available():
+                target = target.cuda(config.gpu, non_blocking=True)
+            output = model(images)
+            loss = criterion(output, target)
+
+            # measure accuracy and record loss
+            acc1, acc5 = accuracy(output, target, topk=(1, 5))
+            losses.update(loss.item(), images.size(0))
+            top1.update(acc1[0], images.size(0))
+            top5.update(acc5[0], images.size(0))
+
+            _, predicted = output.max(1)
+            target_one_hot = F.one_hot(target, config.num_classes)
+            predict_one_hot = F.one_hot(predicted, config.num_classes)
+            class_num = class_num + target_one_hot.sum(dim=0).to(torch.float)
+            correct = correct + (target_one_hot + predict_one_hot == 2).sum(dim=0).to(torch.float)
+
+            prob = torch.softmax(output, dim=1)
+            confidence_part, pred_class_part = torch.max(prob, dim=1)
+            confidence = np.append(confidence, confidence_part.cpu().numpy())
+            pred_class = np.append(pred_class, pred_class_part.cpu().numpy())
+            true_class = np.append(true_class, target.cpu().numpy())
+
+            # measure elapsed time
+            batch_time.update(time.time() - end)
+            end = time.time()
+
+            if i % config.print_freq == 0:
+                progress.display(i, logger)
+
+        acc_classes = correct / class_num
+        head_acc = acc_classes[config.head_class_idx[0]:config.head_class_idx[1]].mean() * 100
+
+        med_acc = acc_classes[config.med_class_idx[0]:config.med_class_idx[1]].mean() * 100
+        tail_acc = acc_classes[config.tail_class_idx[0]:config.tail_class_idx[1]].mean() * 100
+        logger.info(
+            '* Acc@1 {top1.avg:.3f}% Acc@5 {top5.avg:.3f}% HAcc {head_acc:.3f}% MAcc {med_acc:.3f}% TAcc {tail_acc:.3f}%.'.format(
+                top1=top1, top5=top5, head_acc=head_acc, med_acc=med_acc, tail_acc=tail_acc))
+
+        cal = calibration(true_class, pred_class, confidence, num_bins=15)
+        logger.info('* ECE   {ece:.3f}%.'.format(ece=cal['expected_calibration_error'] * 100))
+
+    return top1.avg, losses.avg, cal['expected_calibration_error'] * 100
+
+def save_checkpoint(state, is_best, model_dir):
+    filename = model_dir + '/current.pth.tar'
+    torch.save(state, filename)
+    if is_best:
+        shutil.copyfile(filename, model_dir + '/model_best.pth.tar')
+
+def adjust_learning_rate(optimizer, epoch, config):
+    """Sets the learning rate"""
+    if config.cos:
+        lr_min = 0
+        lr_max = config.lr
+        lr = lr_min + 0.5 * (lr_max - lr_min) * (1 + math.cos(epoch / config.num_epochs * 3.1415926535))
+    else:
+        epoch = epoch + 1
+        if epoch <= 5:
+            lr = config.lr * epoch / 5
+        elif epoch > 180:
+            lr = config.lr * 0.01
+        elif epoch > 160:
+            lr = config.lr * 0.1
+        else:
+            lr = config.lr
+
+    for param_group in optimizer.param_groups:
+        param_group['lr'] = lr
 
 if __name__ == '__main__':
     main()
