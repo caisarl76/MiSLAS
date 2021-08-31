@@ -101,3 +101,4 @@ def create_logger(cfg, cfg_name, add_date=False):
     os.makedirs(model_dir, exist_ok=True)
 
     return logger, str(model_dir), writer
+

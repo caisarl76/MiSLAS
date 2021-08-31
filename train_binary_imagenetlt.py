@@ -91,13 +91,17 @@ def main():
         config.world_size = ngpus_per_node * config.world_size
         # Use torch.multiprocessing.spawn to launch distributed processes: the
         # main_worker process function
-        mp.spawn(main_worker, nprocs=ngpus_per_node, args=(ngpus_per_node, config, logger, model_dir, writer))
+        mp.spawn(main_worker, nprocs=ngpus_per_node, args=(ngpus_per_node, config, logger, model_dir))
     else:
         # Simply call main_worker function
-        main_worker(config.gpu, ngpus_per_node, config, logger, model_dir, writer)
+        main_worker(config.gpu, ngpus_per_node, config, logger, model_dir)
 
 
-def main_worker(gpu, ngpus_per_node, config, logger, model_dir, writer):
+def main_worker(gpu, ngpus_per_node, config, logger, model_dir):
+
+    ###
+    writer = create_writer(config, model_dir)
+
     global best_acc1, its_ece
     config.gpu = gpu
 #     start_time = time.strftime("%Y%m%d_%H%M%S", time.localtime())
@@ -365,6 +369,17 @@ def adjust_learning_rate(optimizer, epoch, config):
 
     for param_group in optimizer.param_groups:
         param_group['lr'] = lr
+
+
+def create_writer(cfg, model_dir):
+    # time_str = time.strftime('%Y%m%d%H%M')
+    log_dir = model_dir.replace('ckps', 'logs')
+    print('=> creating {}'.format(log_dir))
+    os.makedirs(log_dir, exist_ok=True)
+
+    writer = SummaryWriter(log_dir)
+    return writer
+
 
 if __name__ == '__main__':
     main()
