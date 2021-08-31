@@ -91,7 +91,7 @@ def main():
         config.world_size = ngpus_per_node * config.world_size
         # Use torch.multiprocessing.spawn to launch distributed processes: the
         # main_worker process function
-        mp.spawn(main_worker, nprocs=ngpus_per_node, args=(ngpus_per_node, config, logger))
+        mp.spawn(main_worker, nprocs=ngpus_per_node, args=(ngpus_per_node, config, logger, model_dir, writer))
     else:
         # Simply call main_worker function
         main_worker(config.gpu, ngpus_per_node, config, logger, model_dir, writer)
