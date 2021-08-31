@@ -64,16 +64,16 @@ def main():
     logger.info('\n' + pprint.pformat(args))
     logger.info('\n' + str(config))
 
-    # if config.deterministic:
-    #     seed = 0
-    #     torch.backends.cudnn.deterministic = True
-    #     torch.backends.cudnn.benchmark = False
-    #     random.seed(seed)
-    #     np.random.seed(seed)
-    #     os.environ['PYTHONHASHSEED'] = str(seed)
-    #     torch.manual_seed(seed)
-    #     torch.cuda.manual_seed(seed)
-    #     torch.cuda.manual_seed_all(seed)
+    if config.deterministic:
+        seed = 0
+        torch.backends.cudnn.deterministic = True
+        torch.backends.cudnn.benchmark = False
+        random.seed(seed)
+        np.random.seed(seed)
+        os.environ['PYTHONHASHSEED'] = str(seed)
+        torch.manual_seed(seed)
+        torch.cuda.manual_seed(seed)
+        torch.cuda.manual_seed_all(seed)
 
     if config.gpu is not None:
         warnings.warn('You have chosen a specific GPU. This will completely '
@@ -123,6 +123,7 @@ def main_worker(gpu, ngpus_per_node, config, logger, model_dir, writer):
         # For multiprocessing distributed, DistributedDataParallel constructor
         # should always set the single device scope, otherwise,
         # DistributedDataParallel will use all available devices.
+        model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model)
         if config.gpu is not None:
             torch.cuda.set_device(config.gpu)
             model.cuda(config.gpu)
@@ -141,9 +142,11 @@ def main_worker(gpu, ngpus_per_node, config, logger, model_dir, writer):
     elif config.gpu is not None:
         torch.cuda.set_device(config.gpu)
         model = model.cuda(config.gpu)
+        raise NotImplementedError("Only DistributedDataParallel is supported.")
     else:
         # DataParallel will divide and allocate batch_size to all available GPUs
         model = torch.nn.DataParallel(model).cuda()
+        raise NotImplementedError("Only DistributedDataParallel is supported.")
 
 
     # optionally resume from a checkpoint
