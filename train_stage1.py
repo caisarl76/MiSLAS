@@ -57,7 +57,7 @@ its_ece = 100
 
 def main():
     args = parse_args()
-    logger, model_dir = create_logger(config, args.cfg)
+    logger, model_dir, writer = create_logger(config, args.cfg)
     logger.info('\n' + pprint.pformat(args))
     logger.info('\n' + str(config))
 
