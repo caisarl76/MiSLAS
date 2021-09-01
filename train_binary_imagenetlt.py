@@ -194,8 +194,8 @@ def train(train_loader, model, criterion, optimizer, scheduler, epoch, config, l
         data_time.update(time.time() - end)
 
         if torch.cuda.is_available():
-            images = images.cuda()
-            target = target.cuda()
+            images = images.cuda(config.gpu, non_blocking=True)
+            target = target.cuda(config.gpu, non_blocking=True)
 
         if config.mixup is True:
             images, targets_a, targets_b, lam = mixup_data(images, target, alpha=config.alpha)
