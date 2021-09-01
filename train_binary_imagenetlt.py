@@ -100,8 +100,7 @@ def main_worker(gpu, ngpus_per_node, config, logger, model_dir, writer):
     elif torch.cuda.device_count() > 1:
         print('use %d gpus' %(torch.cuda.device_count()))
         model = nn.DataParallel(model).cuda()
-    else:
-        device = torch.device("cuda:0")
+    device = torch.device("cuda:0")
     model = model.to(device)
 
 
