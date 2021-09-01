@@ -35,8 +35,7 @@ from utils import accuracy, calibration
 
 from methods import mixup_data, mixup_criterion
 
-from binary.reactnet_optimized import Reactnet
-
+from binary.reactnet_imagenet import reactnet
 
 def parse_args():
     parser = argparse.ArgumentParser(description='MiSLAS training (Stage-1)')
@@ -89,12 +88,13 @@ def main():
     if config.gpu is not None:
         logger.info("Use GPU: {} for training".format(config.gpu))
 
-    model = Reactnet(num_classes=1000)
+    model = reactnet()
 
     if not torch.cuda.is_available():
         logger.info('using CPU, this will be slow')
         raise NotImplementedError("Only DistributedDataParallel is supported.")
     elif torch.cuda.device_count() > 1:
+
         print('use %d gpus' %(torch.cuda.device_count()))
         model = torch.nn.DataParallel(model).cuda()
 
