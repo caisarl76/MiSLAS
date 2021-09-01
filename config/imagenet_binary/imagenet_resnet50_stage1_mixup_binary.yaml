@@ -1,6 +1,6 @@
 name: imagenet_resnet50_stage1_binary
 print_freq: 100
-workers: 16
+workers: 32
 log_dir: 'logs'
 model_dir: 'ckps'
 
