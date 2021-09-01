@@ -11,23 +11,13 @@ import math
 import torch
 import torch.nn as nn
 import torch.nn.parallel
-import torch.distributed as dist
 import torch.optim
-import torch.multiprocessing as mp
 import torch.utils.data
 import torch.utils.data.distributed
 import torch.nn.functional as F
 from torch.utils.tensorboard import SummaryWriter
 
-from datasets.cifar10 import CIFAR10_LT
-from datasets.cifar100 import CIFAR100_LT
-from datasets.places import Places_LT
 from datasets.imagenet import ImageNet_LT
-from datasets.ina2018 import iNa2018
-
-from models import resnet
-from models import resnet_places
-from models import resnet_cifar
 
 from utils import config, update_config, create_logger
 from utils import AverageMeter, ProgressMeter
@@ -98,7 +88,7 @@ def main():
         print('use %d gpus' %(torch.cuda.device_count()))
         model = torch.nn.DataParallel(model).cuda()
 
-    torch.backends.cudnn.benchmark = True
+    # torch.backends.cudnn.benchmark = True
     print('    Total params: %.2fM' % (sum(p.numel() for p in model.parameters()) / 1000000.0))
 
     # optionally resume from a checkpoint
