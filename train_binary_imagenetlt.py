@@ -81,12 +81,9 @@ def main():
 
     ngpus_per_node = torch.cuda.device_count()
     # Simply call main_worker function
-    main_worker(config.gpu, ngpus_per_node, config, logger, model_dir, writer)
 
-
-def main_worker(gpu, ngpus_per_node, config, logger, model_dir, writer):
     global best_acc1, its_ece
-    config.gpu = gpu
+
 #     start_time = time.strftime("%Y%m%d_%H%M%S", time.localtime())
 
     if config.gpu is not None:
@@ -100,10 +97,6 @@ def main_worker(gpu, ngpus_per_node, config, logger, model_dir, writer):
     elif torch.cuda.device_count() > 1:
         print('use %d gpus' %(torch.cuda.device_count()))
         model = torch.nn.DataParallel(model).cuda()
-    # device = torch.device("cuda:0")
-    # model = model.to(device)
-
-
 
     # optionally resume from a checkpoint
     cur_epoch = 0

@@ -14,7 +14,6 @@ _C.model_dir = 'ckps'
 _C.simsiam = None
 _C.binary = False
 
-_C.use_byot = False
 _C.temperature = 3.0
 _C.alpha = 0.1
 _C.beta = 1e-6
@@ -55,9 +54,7 @@ _C.mixup = False
 _C.alpha = 0.0
 _C.mixup = True
 _C.alpha = 1.0
-_C.cskd = False
-_C.temp = 0.0
-_C.lamda = 0.0
+
 
 
 def update_config(cfg, args):
