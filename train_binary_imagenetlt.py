@@ -99,9 +99,9 @@ def main_worker(gpu, ngpus_per_node, config, logger, model_dir, writer):
         raise NotImplementedError("Only DistributedDataParallel is supported.")
     elif torch.cuda.device_count() > 1:
         print('use %d gpus' %(torch.cuda.device_count()))
-        model = nn.DataParallel(model).cuda()
-    device = torch.device("cuda:0")
-    model = model.to(device)
+        model = torch.nn.DataParallel(model).cuda()
+    # device = torch.device("cuda:0")
+    # model = model.to(device)
 
 
 
@@ -193,8 +193,8 @@ def train(train_loader, model, criterion, optimizer, scheduler, epoch, config, l
         data_time.update(time.time() - end)
 
         if torch.cuda.is_available():
-            images = images.cuda(config.gpu, non_blocking=True)
-            target = target.cuda(config.gpu, non_blocking=True)
+            images = images.cuda()
+            target = target.cuda()
 
         if config.mixup is True:
             images, targets_a, targets_b, lam = mixup_data(images, target, alpha=config.alpha)
@@ -250,9 +250,8 @@ def validate(val_loader, model, criterion, config, logger):
     with torch.no_grad():
         end = time.time()
         for i, (images, target) in enumerate(val_loader):
-            if config.gpu is not None:
-                images = images.cuda()
             if torch.cuda.is_available():
+                images = images.cuda()
                 target = target.cuda()
             output = model(images)
             loss = criterion(output, target)
