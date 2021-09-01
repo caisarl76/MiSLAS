@@ -92,7 +92,7 @@ def main_worker(gpu, ngpus_per_node, config, logger, model_dir, writer):
     if config.gpu is not None:
         logger.info("Use GPU: {} for training".format(config.gpu))
 
-    model = Reactnet()
+    model = Reactnet(num_classes=1000)
 
     if not torch.cuda.is_available():
         logger.info('using CPU, this will be slow')
@@ -153,10 +153,10 @@ def main_worker(gpu, ngpus_per_node, config, logger, model_dir, writer):
         if is_best:
             its_ece = ece
         logger.info('Best Prec@1: %.3f%% ECE: %.3f%%\n' % (best_acc1, its_ece))
-        if gpu == 0:
-            writer.add_scalar('val loss', loss, epoch)
-            writer.add_scalar('val ece', ece, epoch)
-            writer.add_scalar('val acc', acc1, epoch)
+        writer.add_scalar('val loss', loss, epoch)
+        writer.add_scalar('val ece', ece, epoch)
+        writer.add_scalar('val acc', acc1, epoch)
+
         if epoch % 10 == 0:
             save_checkpoint({
                 'epoch': epoch + 1,
@@ -164,8 +164,7 @@ def main_worker(gpu, ngpus_per_node, config, logger, model_dir, writer):
                 'best_acc1': best_acc1,
                 'its_ece': its_ece,
             }, is_best, model_dir)
-    if gpu == 0:
-        writer.close()
+    writer.close()
 
 
 def train(train_loader, model, criterion, optimizer, scheduler, epoch, config, logger, writer=None):
