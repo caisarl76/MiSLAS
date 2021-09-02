@@ -44,7 +44,8 @@ momentum: 0.9
 cos: True
 mixup: True
 alpha: 0.2
-
+optimizer: adam
+lr_scheduler: cosine
 
 
 

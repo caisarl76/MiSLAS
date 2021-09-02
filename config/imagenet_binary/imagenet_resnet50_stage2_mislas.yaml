@@ -47,7 +47,8 @@ num_epochs: 10
 momentum: 0.9
 mixup: False
 alpha: null
-
+optimizer: adam
+lr_scheduler: cosine
 
 
 
