@@ -44,9 +44,6 @@ momentum: 0.9
 cos: False
 mixup: True
 alpha: 1.0
-cskd: False
-temp: 0.0
-lamda: 0.0
 
 
 
