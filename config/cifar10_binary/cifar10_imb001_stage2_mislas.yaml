@@ -10,7 +10,7 @@ data_path: './data/cifar10'
 num_classes: 10
 imb_factor: 0.01
 backbone: 'resnet32_fe'
-resume: 'Path/to/Stage1_checkpoint.pth.tar'
+resume: 'saved/binary/cifar10_imb001_stage1_mixup_binary/sgd_step/0.01/epochs_200_bs128/ckps/model_best.pth.tar'
 head_class_idx:
   - 0
   - 3
