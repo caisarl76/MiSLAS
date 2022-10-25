@@ -1,8 +1,10 @@
 import os
 import sys
+from contextlib import suppress
 
 import torch
 import torch.nn as nn
+import torch.nn.init as init
 import torch.utils.model_zoo as model_zoo
 import torch.nn.functional as F
 import numpy as np
@@ -82,7 +84,7 @@ class BinaryConv2d(nn.Conv2d):
                 self.weight_bin_tensor = SignWeight.apply(self.weight)
             else:
                 input = input.clone()
-                input.data = input.sign()
+                input.samples = input.sign()
                 self.weight_bin_tensor = self.weight.new_tensor(self.weight.sign())
             scaling_factor = torch.mean(
                 torch.mean(torch.mean(abs(self.weight), dim=3, keepdim=True), dim=2, keepdim=True),
@@ -172,10 +174,22 @@ class BasicBlock(nn.Module):
         return out2
 
 
+class Classifier(nn.Module):
+    def __init__(self, feat_in=1024, num_classes=100):
+        super(Classifier, self).__init__()
+        self.fc = nn.Linear(feat_in, num_classes)
+        init.kaiming_normal_(self.fc.weight)
+    def forward(self, x):
+        x = self.fc(x)
+        return x
+
 class Reactnet(nn.Module):
-    def __init__(self, num_classes=10, stage_out_channel=stage_out_channel, in_features=1024):
+    def __init__(self, num_classes=10, stage_out_channel=stage_out_channel, in_features=1024, ver2=False, penult_feat=False):
         super(Reactnet, self).__init__()
+        self.ver2 = ver2
         self.feature = nn.ModuleList()
+        self.penult_feat = penult_feat
+        self.forward_syntax = suppress()
         for i in range(len(stage_out_channel)):
             if i == 0:
                 self.feature.append(firstconv3x3(3, stage_out_channel[i], 1))
@@ -184,17 +198,30 @@ class Reactnet(nn.Module):
             else:
                 self.feature.append(BasicBlock(stage_out_channel[i - 1], stage_out_channel[i], 1))
         self.pool1 = nn.AdaptiveAvgPool2d(1)
-        self.fc = nn.Linear(in_features, num_classes)
+
+        if not self.ver2:
+            self.fc = nn.Linear(in_features, num_classes)
+
+    def change_no_grad(self):
+        self.forward_syntax = torch.no_grad()
+
+    def change_with_grad(self):
+        self.forward_syntax = suppress()
 
     def forward(self, x):
-        for i, block in enumerate(self.feature):
-            x = block(x)
-
+        with self.forward_syntax:
+            for i, block in enumerate(self.feature):
+                x = block(x)
         x = self.pool1(x)
+        feat = x
         x = x.view(x.size(0), -1)
-        x = self.fc(x)
-
-        return x
+        if not self.ver2:
+            x = self.fc(x)
+            return x
+        elif self.penult_feat:
+            return feat, x
+        else:
+            return x
 
     def binarize(self):
         for n, m in self.named_modules():
@@ -263,9 +290,13 @@ class Reactnet(nn.Module):
 
 if __name__ == '__main__':
     inp = torch.randn(64, 3, 32, 32)
-    model = Reactnet()
-    out1 = model(inp)
-    print(out1)
+    model = Reactnet(ver2=True)
+    classifier = Classifier(num_classes=10)
+    feat1 = model(inp)
+
+    print(feat1.shape)
+    out = classifier(feat1)
+    print(out.shape)
     model.unbinarize()
     out2 = model(inp)
     print(1)

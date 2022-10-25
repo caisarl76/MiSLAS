@@ -8,7 +8,7 @@ from torch.utils.tensorboard import SummaryWriter
 _C = CN()
 _C.name = ''
 _C.print_freq = 40
-_C.workers = 16
+_C.workers = 2
 _C.log_dir = 'logs'
 _C.model_dir = 'ckps'
 _C.simsiam = None
@@ -43,10 +43,10 @@ _C.smooth_head = None
 _C.shift_bn = False
 _C.lr_factor = None
 _C.lr = 0.1
-_C.optimizer = 'sgd'
-_C.lr_scheduler = 'step'
+_C.optimizer = 'adam'
+_C.lr_scheduler = 'cosine'
 _C.batch_size = 128
-_C.weight_decay = 0.002
+_C.weight_decay = 0.0
 _C.num_epochs = 200
 _C.momentum = 0.9
 _C.cos = False
@@ -71,9 +71,8 @@ def create_logger(cfg, cfg_name, add_date=False):
 
     cfg_name = os.path.basename(cfg_name).split('.')[0]
 
-    args_list = '_'.join([cfg.optimizer, cfg.lr_scheduler])
-    path = os.path.join('saved/binary', cfg_name, args_list, (str)(cfg.lr),
-                        '_'.join(['epochs', (str)(cfg.num_epochs), 'bs' + (str)(cfg.batch_size)])
+    path = os.path.join('saved', cfg_name, (cfg.dataset + '_'+ (str)(cfg.imb_factor)),
+                        '_'.join(['epochs', (str)(cfg.num_epochs), 'bs' + (str)(cfg.batch_size), 'lr' + (str)(cfg.lr), cfg.optimizer, cfg.lr_scheduler])
                     )
     # if add_date:
     #     log_dir = Path("saved") / (cfg_name + '_' + time_str) / Path(cfg.log_dir)

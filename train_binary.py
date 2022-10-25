@@ -19,23 +19,16 @@ import torch.utils.data.distributed
 import torch.nn.functional as F
 from torch.utils.tensorboard import SummaryWriter
 
-from datasets.cifar10 import CIFAR10_LT
-from datasets.cifar100 import CIFAR100_LT
-from datasets.places import Places_LT
-from datasets.imagenet import ImageNet_LT
-from datasets.ina2018 import iNa2018
+from custum_data.new_dataset import get_dataset
 
-from models import resnet
-from models import resnet_places
 from models import resnet_cifar
+from binary.reactnet_imagenet import reactnet
 
 from utils import config, update_config, create_logger
 from utils import AverageMeter, ProgressMeter
 from utils import accuracy, calibration
 
 from methods import mixup_data, mixup_criterion
-
-from binary.reactnet_optimized import Reactnet
 
 def parse_args():
     parser = argparse.ArgumentParser(description='MiSLAS training (Stage-1)')
@@ -92,22 +85,18 @@ def main_worker(gpu, ngpus_per_node, config, logger, model_dir, writer):
     if config.gpu is not None:
         logger.info("Use GPU: {} for training".format(config.gpu))
 
-    model = Reactnet(num_classes=config.num_classes)
+
+    train_dataset, val_dataset, config = get_dataset(config)
+    train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=config.batch_size,
+                                               num_workers=config.workers, shuffle=True, drop_last=True)
+    val_loader = torch.utils.data.DataLoader(val_dataset, batch_size=config.batch_size,
+                                               num_workers=config.workers, shuffle=False)
+
+    model = reactnet(num_classes=config.num_classes)
 
     if config.gpu is not None:
         torch.cuda.set_device(config.gpu)
         model = model.cuda(config.gpu)
-
-    if config.dataset == 'cifar10':
-        dataset = CIFAR10_LT(root=config.data_path, imb_factor=config.imb_factor,
-                              batch_size=config.batch_size, num_works=config.workers, distributed=config.distributed)
-
-    elif config.dataset == 'cifar100':
-        dataset = CIFAR100_LT(root=config.data_path, imb_factor=config.imb_factor,
-                              batch_size=config.batch_size, num_works=config.workers, distributed=config.distributed)
-
-    train_loader = dataset.train_instance
-    val_loader = dataset.eval
 
     # define loss function (criterion) and optimizer
     criterion = nn.CrossEntropyLoss().cuda(config.gpu)
@@ -118,8 +107,8 @@ def main_worker(gpu, ngpus_per_node, config, logger, model_dir, writer):
     for epoch in range(config.num_epochs):
         # adjust_learning_rate(optimizer, scheduler, epoch, config)
         # train for one epoch
-        train(train_loader, model, criterion, optimizer, scheduler, epoch, config, logger, writer)
-
+        train(train_loader, model, criterion, optimizer, epoch, config, logger, writer)
+        scheduler.step()
         # evaluate on validation set
         acc1, loss, ece = validate(val_loader, model, criterion, config, logger)
 
@@ -142,7 +131,7 @@ def main_worker(gpu, ngpus_per_node, config, logger, model_dir, writer):
     writer.close()
 
 
-def train(train_loader, model, criterion, optimizer, scheduler, epoch, config, logger, writer):
+def train(train_loader, model, criterion, optimizer, epoch, config, logger, writer):
 
     batch_time = AverageMeter('Time', ':6.3f')
     data_time = AverageMeter('Data', ':6.3f')
@@ -176,7 +165,6 @@ def train(train_loader, model, criterion, optimizer, scheduler, epoch, config, l
             output = model(images)
             loss = mixup_criterion(criterion, output, targets_a, targets_b, lam)
         else:
-
             output = model(images)
             loss = criterion(output, target)
 
@@ -189,7 +177,6 @@ def train(train_loader, model, criterion, optimizer, scheduler, epoch, config, l
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
-        scheduler.step()
 
         # measure elapsed time
         batch_time.update(time.time() - end)
