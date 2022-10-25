@@ -35,7 +35,7 @@ multiprocessing_distributed: False
 # Train
 mode: 'stage1'
 lr: 0.01
-batch_size: 16
+batch_size: 128
 num_epochs: 200
 momentum: 0.9
 cos: False
