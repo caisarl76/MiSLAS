@@ -129,9 +129,9 @@ def main_worker(gpu, ngpus_per_node, config, logger, model_dir, writer):
         if is_best:
             its_ece = ece
         logger.info('Best Prec@1: %.3f%% ECE: %.3f%%\n' % (best_acc1, its_ece))
-        writer.add_scalar('val loss', loss, epoch)
-        writer.add_scalar('val ece', ece, epoch)
-        writer.add_scalar('val acc', acc1, epoch)
+        writer.add_scalar('val_loss', loss, epoch)
+        writer.add_scalar('val_ece', ece, epoch)
+        writer.add_scalar('val_acc', acc1, epoch)
         if epoch % 10 == 0:
             save_checkpoint({
                 'epoch': epoch + 1,
@@ -197,8 +197,8 @@ def train(train_loader, model, criterion, optimizer, scheduler, epoch, config, l
 
         if i % config.print_freq == 0:
             progress.display(i, logger)
-        writer.add_scalar('train loss', losses.avg, epoch)
-        writer.add_scalar('train acc', top1.avg, epoch)
+        writer.add_scalar('train_loss', losses.avg, epoch)
+        writer.add_scalar('train_acc', top1.avg, epoch)
 
 
 def validate(val_loader, model, criterion, config, logger):
