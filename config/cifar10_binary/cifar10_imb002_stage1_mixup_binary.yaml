@@ -13,13 +13,13 @@ imb_factor: 0.02
 resume: ''
 head_class_idx:
   - 0
-  - 36
+  - 3
 med_class_idx:
-  - 36
-  - 71
+  - 3
+  - 7
 tail_class_idx:
-  - 71
-  - 100
+  - 7
+  - 10
 
 
 # distributed training

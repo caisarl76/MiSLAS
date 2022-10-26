@@ -102,7 +102,7 @@ def main_worker(gpu, ngpus_per_node, config, logger, model_dir, writer):
     criterion = nn.CrossEntropyLoss().cuda(config.gpu)
 
     optimizer = torch.optim.Adam(model.parameters(), lr=config.lr)
-    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=200, eta_min=0)
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=config.num_epochs, eta_min=0)
 
     for epoch in range(config.num_epochs):
         # adjust_learning_rate(optimizer, scheduler, epoch, config)
