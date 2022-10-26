@@ -1,6 +1,6 @@
 name: cifar10_imb001_stage2_mislas
 print_freq: 40
-workers: 16
+workers: 2
 log_dir: 'logs'
 model_dir: 'ckps'
 

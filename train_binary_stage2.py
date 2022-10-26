@@ -18,15 +18,10 @@ import torch.utils.data
 import torch.utils.data.distributed
 import torch.nn.functional as F
 
-from datasets.cifar10 import CIFAR10_LT
-from datasets.cifar100 import CIFAR100_LT
-from datasets.places import Places_LT
-from datasets.imagenet import ImageNet_LT
-from datasets.ina2018 import iNa2018
+from custum_data.new_dataset import get_dataset
+from datasets.sampler import ClassAwareSampler
 
-from models import resnet
-from models import resnet_places
-from models import resnet_cifar
+from binary.reactnet_imagenet import reactnet
 
 from utils import config, update_config, create_logger
 from utils import AverageMeter, ProgressMeter
@@ -35,7 +30,6 @@ from utils import accuracy, calibration
 from methods import mixup_data, mixup_criterion
 from methods import LabelAwareSmoothing, LearnableWeightScaling
 
-from binary.reactnet_optimized import Reactnet
 
 def parse_args():
     parser = argparse.ArgumentParser(description='MiSLAS training (Stage-2)')
@@ -58,7 +52,6 @@ its_ece = 100
 
 
 def main():
-
     args = parse_args()
     logger, model_dir, writer = create_logger(config, args.cfg)
     logger.info('\n' + pprint.pformat(args))
@@ -100,7 +93,7 @@ def main():
 def main_worker(gpu, ngpus_per_node, config, logger, model_dir):
     global best_acc1, its_ece
     config.gpu = gpu
-#     start_time = time.strftime("%Y%m%d_%H%M%S", time.localtime())
+    #     start_time = time.strftime("%Y%m%d_%H%M%S", time.localtime())
 
     if config.gpu is not None:
         logger.info("Use GPU: {} for training".format(config.gpu))
@@ -115,7 +108,7 @@ def main_worker(gpu, ngpus_per_node, config, logger, model_dir):
         dist.init_process_group(backend=config.dist_backend, init_method=config.dist_url,
                                 world_size=config.world_size, rank=config.rank)
 
-    model = Reactnet(num_classes=config.num_classes)
+    model = reactnet(num_classes=config.num_classes)
 
     lws_model = LearnableWeightScaling(num_classes=config.num_classes)
 
@@ -176,19 +169,16 @@ def main_worker(gpu, ngpus_per_node, config, logger, model_dir):
         else:
             logger.info("=> no checkpoint found at '{}'".format(config.resume))
 
-    if config.dataset == 'cifar10':
-        dataset = CIFAR10_LT(root=config.data_path, imb_factor=config.imb_factor,
-                             batch_size=config.batch_size, num_works=config.workers, distributed=config.distributed)
+    train_dataset, val_dataset, config = get_dataset(config)
+    balance_sampler = ClassAwareSampler(train_dataset)
 
-    elif config.dataset == 'cifar100':
-        dataset = CIFAR100_LT(root=config.data_path, imb_factor=config.imb_factor,
-                              batch_size=config.batch_size, num_works=config.workers, distributed=config.distributed)
-
-    train_loader = dataset.train_balance
-    val_loader = dataset.eval
-    cls_num_list = dataset.cls_num_list
-    if config.distributed:
-        train_sampler = dataset.dist_sampler
+    train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=config.batch_size, num_workers=config.workers,
+                                               pin_memory=True, shuffle=False, sampler=balance_sampler)
+    val_loader = torch.utils.data.DataLoader(val_dataset, batch_size=config.batch_size, num_workers=config.workers,
+                                             pin_memory=True, shuffle=False)
+    cls_num_list = train_dataset.get_cls_num_list()
+    # if config.distributed:
+    #     train_sampler = dataset.dist_sampler
 
     # define loss function (criterion) and optimizer
 
@@ -210,8 +200,8 @@ def main_worker(gpu, ngpus_per_node, config, logger, model_dir):
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=50, eta_min=0)
 
     for epoch in range(config.num_epochs):
-        if config.distributed:
-            train_sampler.set_epoch(epoch)
+        # if config.distributed:
+        #     train_sampler.set_epoch(epoch)
 
         # train for one epoch
         train(train_loader, model, lws_model, criterion, optimizer, scheduler, epoch, config, logger)
@@ -233,7 +223,6 @@ def main_worker(gpu, ngpus_per_node, config, logger, model_dir):
                 'best_acc1': best_acc1,
                 'its_ece': its_ece,
             }, is_best, model_dir)
-
 
 
 def train(train_loader, model, lws_model, criterion, optimizer, scheduler, epoch, config, logger):
@@ -375,6 +364,7 @@ def save_checkpoint(state, is_best, model_dir):
     torch.save(state, filename)
     if is_best:
         shutil.copyfile(filename, model_dir + '/model_best.pth.tar')
+
 
 if __name__ == '__main__':
     main()
