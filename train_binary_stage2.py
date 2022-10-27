@@ -197,14 +197,13 @@ def main_worker(gpu, ngpus_per_node, config, logger, model_dir):
                                  {'params': lws_model.parameters()}], config.lr,
                                 momentum=config.momentum,
                                 weight_decay=config.weight_decay)
-    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=50, eta_min=0)
 
     for epoch in range(config.num_epochs):
         # if config.distributed:
         #     train_sampler.set_epoch(epoch)
-
+        adjust_learning_rate(optimizer, epoch, config)
         # train for one epoch
-        train(train_loader, model, lws_model, criterion, optimizer, scheduler, epoch, config, logger)
+        train(train_loader, model, lws_model, criterion, optimizer, epoch, config, logger)
 
         # evaluate on validation set
         acc1, ece = validate(val_loader, model, lws_model, criterion, config, logger)
@@ -225,7 +224,7 @@ def main_worker(gpu, ngpus_per_node, config, logger, model_dir):
             }, is_best, model_dir)
 
 
-def train(train_loader, model, lws_model, criterion, optimizer, scheduler, epoch, config, logger):
+def train(train_loader, model, lws_model, criterion, optimizer, epoch, config, logger):
     batch_time = AverageMeter('Time', ':6.3f')
     data_time = AverageMeter('Data', ':6.3f')
     losses = AverageMeter('Loss', ':.3f')
@@ -278,13 +277,13 @@ def train(train_loader, model, lws_model, criterion, optimizer, scheduler, epoch
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
-        scheduler.step()
         # measure elapsed time
         batch_time.update(time.time() - end)
         end = time.time()
 
         if i % config.print_freq == 0:
             progress.display(i, logger)
+        # break
 
 
 def validate(val_loader, model, lws_model, criterion, config, logger):
@@ -343,6 +342,7 @@ def validate(val_loader, model, lws_model, criterion, config, logger):
 
             if i % config.print_freq == 0:
                 progress.display(i, logger)
+            # break
 
         acc_classes = correct / class_num
         head_acc = acc_classes[config.head_class_idx[0]:config.head_class_idx[1]].mean() * 100
@@ -365,6 +365,18 @@ def save_checkpoint(state, is_best, model_dir):
     if is_best:
         shutil.copyfile(filename, model_dir + '/model_best.pth.tar')
 
+
+def adjust_learning_rate(optimizer, epoch, config):
+    """Sets the learning rate"""
+    lr_min = 0
+    lr_max = config.lr
+    lr = lr_min + 0.5 * (lr_max - lr_min) * (1 + math.cos(epoch / config.num_epochs * 3.1415926535))
+
+    for idx, param_group in enumerate(optimizer.param_groups):
+        if idx == 0:
+            param_group['lr'] = config.lr_factor * lr
+        else:
+            param_group['lr'] = 1.00 * lr
 
 if __name__ == '__main__':
     main()

@@ -108,9 +108,9 @@ def main_worker(gpu, ngpus_per_node, config, logger, model_dir, writer):
         # adjust_learning_rate(optimizer, scheduler, epoch, config)
         # train for one epoch
         train(train_loader, model, criterion, optimizer, epoch, config, logger, writer)
-        scheduler.step()
         # evaluate on validation set
         acc1, loss, ece = validate(val_loader, model, criterion, config, logger)
+        scheduler.step()
 
         # remember best acc@1 and save checkpoint
         is_best = acc1 > best_acc1
