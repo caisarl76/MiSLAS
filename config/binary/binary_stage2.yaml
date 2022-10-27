@@ -5,8 +5,8 @@ log_dir: 'logs'
 model_dir: 'ckps'
 
 # dataset & model setting
-dataset: 'cifar10'
-data_path: './data/cifar10'
+dataset: 'cub'
+data_path: './data/DEFAULT'
 num_classes: 1
 imb_factor: 1.0
 backbone: 'resnet32_fe'

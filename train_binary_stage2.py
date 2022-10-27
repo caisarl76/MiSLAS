@@ -108,6 +108,14 @@ def main_worker(gpu, ngpus_per_node, config, logger, model_dir):
         dist.init_process_group(backend=config.dist_backend, init_method=config.dist_url,
                                 world_size=config.world_size, rank=config.rank)
 
+    train_dataset, val_dataset, config = get_dataset(config)
+    balance_sampler = ClassAwareSampler(train_dataset)
+    train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=config.batch_size, num_workers=config.workers,
+                                               pin_memory=True, shuffle=False, sampler=balance_sampler)
+    val_loader = torch.utils.data.DataLoader(val_dataset, batch_size=config.batch_size, num_workers=config.workers,
+                                             pin_memory=True, shuffle=False)
+    cls_num_list = train_dataset.get_cls_num_list()
+
     model = reactnet(num_classes=config.num_classes)
 
     lws_model = LearnableWeightScaling(num_classes=config.num_classes)
@@ -169,14 +177,6 @@ def main_worker(gpu, ngpus_per_node, config, logger, model_dir):
         else:
             logger.info("=> no checkpoint found at '{}'".format(config.resume))
 
-    train_dataset, val_dataset, config = get_dataset(config)
-    balance_sampler = ClassAwareSampler(train_dataset)
-
-    train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=config.batch_size, num_workers=config.workers,
-                                               pin_memory=True, shuffle=False, sampler=balance_sampler)
-    val_loader = torch.utils.data.DataLoader(val_dataset, batch_size=config.batch_size, num_workers=config.workers,
-                                             pin_memory=True, shuffle=False)
-    cls_num_list = train_dataset.get_cls_num_list()
     # if config.distributed:
     #     train_sampler = dataset.dist_sampler
 
