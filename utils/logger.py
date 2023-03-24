@@ -71,8 +71,9 @@ def create_logger(cfg, cfg_name, add_date=False):
 
     cfg_name = os.path.basename(cfg_name).split('.')[0]
 
-    path = os.path.join('saved', cfg_name, (cfg.dataset + '_'+ (str)(cfg.imb_factor)),
-                        '_'.join(['epochs', (str)(cfg.num_epochs), 'bs' + (str)(cfg.batch_size), 'lr' + (str)(cfg.lr), cfg.optimizer, cfg.lr_scheduler])
+    path = os.path.join('saved', 
+                        cfg_name, 
+                        (cfg.dataset + '_'+ (str)(cfg.imb_factor)),                        
                     )
     # if add_date:
     #     log_dir = Path("saved") / (cfg_name + '_' + time_str) / Path(cfg.log_dir)

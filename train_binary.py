@@ -23,25 +23,27 @@ from custum_data.new_dataset import get_dataset
 
 from models import resnet_cifar
 from binary.reactnet_imagenet import reactnet
-
+from binary.bxnet import BNext
 from utils import config, update_config, create_logger
 from utils import AverageMeter, ProgressMeter
 from utils import accuracy, calibration
 
 from methods import mixup_data, mixup_criterion
 
-def parse_args():
+def parser_args():
     parser = argparse.ArgumentParser(description='MiSLAS training (Stage-1)')
     parser.add_argument('--cfg',
                         help='experiment configure file name',
                         required=True,
-                        type=str)
+                        type=str,
+                        default='./config/binary/binary_state1.yaml')
     parser.add_argument('opts',
                         help="Modify config options using the command-line",
                         default=None,
                         nargs=argparse.REMAINDER)
+    parser.add_argument('--bxnet', action='store_true')
     args = parser.parse_args()
-    update_config(config, args)
+    # update_config(config, args)
 
     return args
 
@@ -51,7 +53,8 @@ its_ece = 100
 
 
 def main():
-    args = parse_args()
+    args = parser_args()
+    update_config(config, args)
     logger, model_dir, writer = create_logger(config, args.cfg)
     logger.info('\n' + pprint.pformat(args))
     logger.info('\n' + str(config))
