@@ -428,7 +428,7 @@ class BasicBlock_No_Extra_Design(nn.Module):
 
 
 class BNext(nn.Module):
-    def __init__(self, num_classes=1000, use_fc=False):
+    def __init__(self, num_classes=1000):
         super(BNext, self).__init__()
         drop_rate = 0.0
         
@@ -453,16 +453,16 @@ class BNext(nn.Module):
         
         self.prelu = nn.PReLU(stage_out_channel[-1])
         self.pool1 = nn.AdaptiveAvgPool2d(1)
+        self.fc = nn.Linear(1024, num_classes)
 
     def forward(self, x):
         for i, block in enumerate(self.feature):
             x = block(x)
-        feat = x
-        x = self.prelu(feat)
+        x = self.prelu(x)
         x = self.pool1(x)
         x = x.view(x.size(0), -1)
-
-        return x, feat
+        x = self.fc(x)
+        return x
 
 
 class Classifier(nn.Module):

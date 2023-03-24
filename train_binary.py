@@ -41,7 +41,6 @@ def parser_args():
                         help="Modify config options using the command-line",
                         default=None,
                         nargs=argparse.REMAINDER)
-    parser.add_argument('--bxnet', action='store_true')
     args = parser.parse_args()
     # update_config(config, args)
 
@@ -94,7 +93,8 @@ def main_worker(gpu, ngpus_per_node, config, logger, model_dir, writer):
                                                num_workers=config.workers, shuffle=True, drop_last=True)
     val_loader = torch.utils.data.DataLoader(val_dataset, batch_size=config.batch_size,
                                                num_workers=config.workers, shuffle=False)
-
+    if 'bxnet' in config.name:
+        model = BNext(num_classes=config.num_classes)
     model = reactnet(num_classes=config.num_classes)
 
     if config.gpu is not None:
