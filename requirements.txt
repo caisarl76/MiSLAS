@@ -8,3 +8,5 @@ future
 pandas
 matplotlib
 scipy
+torchinfo
+einops
