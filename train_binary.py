@@ -95,7 +95,8 @@ def main_worker(gpu, ngpus_per_node, config, logger, model_dir, writer):
                                                num_workers=config.workers, shuffle=False)
     if 'bxnet' in config.name:
         model = BNext(num_classes=config.num_classes)
-    model = reactnet(num_classes=config.num_classes)
+    else: # reactnet
+        model = reactnet(num_classes=config.num_classes)
 
     if config.gpu is not None:
         torch.cuda.set_device(config.gpu)
