@@ -125,6 +125,13 @@ def main_worker(gpu, ngpus_per_node, config, logger, model_dir, writer):
         writer.add_scalar('val_loss', loss, epoch)
         writer.add_scalar('val_ece', ece, epoch)
         writer.add_scalar('val_acc', acc1, epoch)
+        if is_best:
+            save_checkpoint({
+                'epoch': epoch + 1,
+                'state_dict_model': model.state_dict(),
+                'best_acc1': best_acc1,
+                'its_ece': its_ece,
+            }, is_best, model_dir)
         if epoch % 10 == 0:
             save_checkpoint({
                 'epoch': epoch + 1,
