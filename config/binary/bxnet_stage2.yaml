@@ -25,7 +25,7 @@ tail_class_idx:
 # distributed training
 deterministic: False
 distributed: False
-gpu: null
+gpu: 0
 world_size: -1
 rank: -1
 dist_url: 'tcp://224.66.41.62:23456'
