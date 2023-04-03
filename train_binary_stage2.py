@@ -154,6 +154,10 @@ def main_worker(gpu, ngpus_per_node, config, logger, model_dir):
         lws_model = torch.nn.DataParallel(lws_model).cuda()
 
         # optionally resume from a checkpoint
+    config.resume = config.resume.split('/')
+    config.resume[3] = config.dataset + '_'+ (str)(config.imb_factor)
+    config.resume = '/'.join(config.resume)
+    print(config.resume)
     if config.resume:
         if os.path.isfile(config.resume):
             logger.info("=> loading checkpoint '{}'".format(config.resume))

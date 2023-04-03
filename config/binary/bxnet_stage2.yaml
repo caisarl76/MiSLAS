@@ -10,7 +10,7 @@ data_path: './data/DEFAULT'
 num_classes: 1
 imb_factor: 1.0
 backbone: 'resnet32_fe'
-resume: 'saved/bxnet_stage1/cifar10_0.01/ckps/model_best.pth.tar'
+resume: './saved/bxnet_stage1/DEFAULT/ckps/model_best.pth.tar'
 head_class_idx:
   - 0
   - 0
