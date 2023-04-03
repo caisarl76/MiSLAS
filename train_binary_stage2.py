@@ -179,7 +179,7 @@ def main_worker(gpu, ngpus_per_node, config, logger, model_dir):
             if config.gpu is not None:
                 # best_acc1 may be from a checkpoint from a different GPU
                 best_acc1 = best_acc1.to(config.gpu)
-            model.module.load_state_dict(state_dict_model)
+            model.load_state_dict(state_dict_model)
             logger.info("=> loaded checkpoint '{}' (epoch {})"
                         .format(config.resume, checkpoint['epoch']))
         else:
