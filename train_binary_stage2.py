@@ -22,6 +22,7 @@ from custum_data.new_dataset import get_dataset
 from datasets.sampler import ClassAwareSampler
 
 from binary.reactnet_imagenet import reactnet
+from binary.bxnet import BNext
 
 from utils import config, update_config, create_logger
 from utils import AverageMeter, ProgressMeter
@@ -116,7 +117,10 @@ def main_worker(gpu, ngpus_per_node, config, logger, model_dir):
                                              pin_memory=True, shuffle=False)
     cls_num_list = train_dataset.get_cls_num_list()
 
-    model = reactnet(num_classes=config.num_classes)
+    if 'bxnet' in config.name:
+        model = BNext(num_classes=config.num_classes)
+    else:  # reactnet
+        model = reactnet(num_classes=config.num_classes)
 
     lws_model = LearnableWeightScaling(num_classes=config.num_classes)
 
